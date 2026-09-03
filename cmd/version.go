@@ -9,7 +9,7 @@ import (
 // Set by goreleaser via ldflags for tagged releases; defaults to the
 // current development version otherwise.
 var (
-	Version = "0.2.0"
+	Version = "0.2.1"
 	Commit  = "unknown"
 )
 

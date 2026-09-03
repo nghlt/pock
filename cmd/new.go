@@ -193,10 +193,6 @@ func runServer(name string, command []string) {
 	_ = server.Run()
 }
 
-func sleepMs(ms int) {
-	time.Sleep(time.Duration(ms) * time.Millisecond)
-}
-
 // generateSessionName creates a session name from current directory
 func generateSessionName() string {
 	cwd, err := os.Getwd()

@@ -11,14 +11,12 @@ import (
 
 var removeCmd = &cobra.Command{
 	Use:     "remove <name>",
-	Aliases: []string{"rm", "delete", "kill"},
+	Aliases: []string{"rm"},
 	Short:   "Remove a session and terminate its process",
 	Long:    `Remove a session by name. This will terminate the running process.`,
 	Example: `  # Remove a session by name
   pock remove myproject
-  pock rm myproject
-  pock delete myproject
-  pock kill myproject`,
+  pock rm myproject`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]

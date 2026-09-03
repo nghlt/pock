@@ -110,7 +110,7 @@ export POCK_DETACH_KEY_2='ctrl-a'
 | `pock new -A [name]` | `n -A`, `create -A` | Attach to session if it exists, or create it |
 | `pock attach [name]` | `a` | Attach to an existing session (default: most recent) |
 | `pock list` | `ls` | List active sessions with status & last active time |
-| `pock remove <name>` | `rm`, `delete`, `kill` | Terminate a running session |
+| `pock remove <name>` | `rm` | Terminate a running session |
 | `pock clear` | `c` | Terminate all sessions (supports `--force` / `-f`) |
 | `pock setup` | — | Configure shell prompt indicator (bash, zsh, fish) |
 

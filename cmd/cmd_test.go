@@ -9,9 +9,12 @@ func TestRemoveCmdAliases(t *testing.T) {
 	for _, a := range removeCmd.Aliases {
 		aliases[a] = true
 	}
-	for _, expected := range []string{"rm", "delete", "kill"} {
-		if !aliases[expected] {
-			t.Errorf("expected removeCmd to have %q alias, got: %v", expected, removeCmd.Aliases)
+	if !aliases["rm"] {
+		t.Errorf("expected removeCmd to have %q alias, got: %v", "rm", removeCmd.Aliases)
+	}
+	for _, notExpected := range []string{"delete", "kill"} {
+		if aliases[notExpected] {
+			t.Errorf("expected removeCmd NOT to have %q alias, got: %v", notExpected, removeCmd.Aliases)
 		}
 	}
 }
