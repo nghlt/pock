@@ -126,6 +126,9 @@ func NewServer(name string, command []string) (*Server, error) {
 		return nil, err
 	}
 
+	// Remove any leftover socket file before listening
+	_ = os.Remove(sockPath)
+
 	listener, err := net.Listen("unix", sockPath)
 	if err != nil {
 		_ = p.Close()
@@ -138,10 +141,12 @@ func NewServer(name string, command []string) (*Server, error) {
 		PID:        os.Getpid(),
 		Command:    command,
 		LastActive: time.Now(),
+		BootID:     CurrentBootID(),
 	}
 	if err := sess.Save(); err != nil {
 		_ = listener.Close()
 		_ = p.Close()
+		_ = os.Remove(sockPath)
 		return nil, err
 	}
 

@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/creack/pty"
 )
@@ -26,8 +27,14 @@ func StartPTY(sessionName string, command []string) (*PTY, error) {
 		cmd = exec.Command(command[0], command[1:]...)
 	}
 
-	// Set up environment with POCK_SESSION to prevent nesting
-	cmd.Env = append(os.Environ(), "POCK_SESSION="+sessionName)
+	// Filter out internal server env vars before passing to child shell
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "POCK_SERVER=") {
+			env = append(env, e)
+		}
+	}
+	cmd.Env = append(env, "POCK_SESSION="+sessionName)
 
 	// Start the command with a PTY
 	ptmx, err := pty.Start(cmd)

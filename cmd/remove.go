@@ -25,6 +25,12 @@ var removeCmd = &cobra.Command{
 
 		sess, err := session.Load(name)
 		if err != nil {
+			sockPath, _ := session.SocketPath(name)
+			if _, statErr := os.Stat(sockPath); statErr == nil {
+				_ = session.Remove(name)
+				fmt.Printf("Session %s removed\n", session.ColorBold(fmt.Sprintf("%q", name), outTTY))
+				return
+			}
 			fmt.Fprintf(os.Stderr, "%s session %q does not exist\n", session.ColorRed("Error:", isTTY), name)
 			os.Exit(1)
 		}

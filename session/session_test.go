@@ -124,3 +124,179 @@ func TestFormatStatusMsg(t *testing.T) {
 		t.Errorf("FormatStatusMsg output missing expected parts: %s", msg)
 	}
 }
+
+func TestCleanupStale(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("POCK_DATA_DIR", tempDir)
+
+	curBoot := CurrentBootID()
+
+	// 1. Live session
+	liveSess := &Session{
+		Name:    "live",
+		PID:     os.Getpid(),
+		BootID:  curBoot,
+		Command: []string{"bash"},
+	}
+	if err := liveSess.Save(); err != nil {
+		t.Fatalf("failed to save live session: %v", err)
+	}
+	liveSock, _ := SocketPath("live")
+	if err := os.WriteFile(liveSock, []byte(""), 0600); err != nil {
+		t.Fatalf("failed to create live socket: %v", err)
+	}
+
+	// 2. Stale session with dead PID
+	staleDead := &Session{
+		Name:    "stale-dead",
+		PID:     99999999,
+		BootID:  curBoot,
+		Command: []string{"bash"},
+	}
+	if err := staleDead.Save(); err != nil {
+		t.Fatalf("failed to save stale-dead session: %v", err)
+	}
+	staleDeadSock, _ := SocketPath("stale-dead")
+	_ = os.WriteFile(staleDeadSock, []byte(""), 0600)
+
+	// 3. Stale session from previous boot (if system supports BootID)
+	if curBoot != "" {
+		staleBoot := &Session{
+			Name:    "stale-boot",
+			PID:     os.Getpid(),
+			BootID:  "old-boot-uuid-from-prev-boot",
+			Command: []string{"bash"},
+		}
+		if err := staleBoot.Save(); err != nil {
+			t.Fatalf("failed to save stale-boot session: %v", err)
+		}
+		staleBootSock, _ := SocketPath("stale-boot")
+		_ = os.WriteFile(staleBootSock, []byte(""), 0600)
+	}
+
+	// 4. Corrupted json session
+	corruptPath, _ := InfoPath("corrupt")
+	_ = os.WriteFile(corruptPath, []byte("not valid json {"), 0600)
+	corruptSock, _ := SocketPath("corrupt")
+	_ = os.WriteFile(corruptSock, []byte(""), 0600)
+
+	// 5. Orphaned .sock and .err files (no json)
+	orphanedSock, _ := SocketPath("orphaned")
+	_ = os.WriteFile(orphanedSock, []byte(""), 0600)
+	orphanedErr, _ := ErrorPath("orphaned")
+	_ = os.WriteFile(orphanedErr, []byte("error"), 0600)
+
+	// Run cleanup
+	if err := CleanupStale(); err != nil {
+		t.Fatalf("CleanupStale failed: %v", err)
+	}
+
+	// Verify live session is intact
+	if _, err := os.Stat(liveSock); err != nil {
+		t.Errorf("expected live session socket to exist, got: %v", err)
+	}
+	if _, err := Load("live"); err != nil {
+		t.Errorf("expected live session json to exist, got: %v", err)
+	}
+
+	// Verify stale sessions and orphaned files are cleaned up
+	if _, err := os.Stat(staleDeadSock); err == nil {
+		t.Errorf("expected stale-dead socket to be removed")
+	}
+	if _, err := Load("stale-dead"); err == nil {
+		t.Errorf("expected stale-dead json to be removed")
+	}
+
+	if curBoot != "" {
+		staleBootSock, _ := SocketPath("stale-boot")
+		if _, err := os.Stat(staleBootSock); err == nil {
+			t.Errorf("expected stale-boot socket to be removed")
+		}
+		if _, err := Load("stale-boot"); err == nil {
+			t.Errorf("expected stale-boot json to be removed")
+		}
+	}
+
+	if _, err := os.Stat(corruptSock); err == nil {
+		t.Errorf("expected corrupt socket to be removed")
+	}
+	if _, err := os.Stat(corruptPath); err == nil {
+		t.Errorf("expected corrupt json to be removed")
+	}
+
+	if _, err := os.Stat(orphanedSock); err == nil {
+		t.Errorf("expected orphaned socket to be removed")
+	}
+	if _, err := os.Stat(orphanedErr); err == nil {
+		t.Errorf("expected orphaned err to be removed")
+	}
+}
+
+func TestExistsStaleCleanup(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("POCK_DATA_DIR", tempDir)
+
+	// Create stale session with non-existent PID
+	sess := &Session{
+		Name: "stale-check",
+		PID:  99999999,
+	}
+	if err := sess.Save(); err != nil {
+		t.Fatalf("failed to save session: %v", err)
+	}
+	sockPath, _ := SocketPath("stale-check")
+	_ = os.WriteFile(sockPath, []byte(""), 0600)
+
+	// Exists should return false and clean up files
+	if Exists("stale-check") {
+		t.Errorf("expected Exists to return false for dead session")
+	}
+
+	// Verify files were removed
+	if _, err := os.Stat(sockPath); err == nil {
+		t.Errorf("expected socket to be removed by Exists()")
+	}
+	if _, err := Load("stale-check"); err == nil {
+		t.Errorf("expected json to be removed by Exists()")
+	}
+}
+
+func TestListCleansStale(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("POCK_DATA_DIR", tempDir)
+
+	// Live session
+	liveSess := &Session{
+		Name: "live-session",
+		PID:  os.Getpid(),
+	}
+	_ = liveSess.Save()
+	liveSock, _ := SocketPath("live-session")
+	_ = os.WriteFile(liveSock, []byte(""), 0600)
+
+	// Dead session
+	deadSess := &Session{
+		Name: "dead-session",
+		PID:  99999999,
+	}
+	_ = deadSess.Save()
+	deadSock, _ := SocketPath("dead-session")
+	_ = os.WriteFile(deadSock, []byte(""), 0600)
+
+	sessions, err := List()
+	if err != nil {
+		t.Fatalf("List() failed: %v", err)
+	}
+
+	if len(sessions) != 1 {
+		t.Fatalf("expected exactly 1 active session, got %d", len(sessions))
+	}
+	if sessions[0].Name != "live-session" {
+		t.Errorf("expected session name 'live-session', got %q", sessions[0].Name)
+	}
+
+	// Verify dead session was cleaned up
+	if _, err := os.Stat(deadSock); err == nil {
+		t.Errorf("expected dead-session socket to be removed")
+	}
+}

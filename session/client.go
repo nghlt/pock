@@ -178,6 +178,7 @@ func Attach(name string, opts AttachOptions) error {
 
 	conn, err := net.Dial("unix", sockPath)
 	if err != nil {
+		_ = Remove(name)
 		return fmt.Errorf("failed to connect to session: %w", err)
 	}
 

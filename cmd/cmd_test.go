@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"os"
 	"testing"
+
+	"github.com/nghlt/pock/session"
 )
 
 func TestRemoveCmdAliases(t *testing.T) {
@@ -59,5 +62,34 @@ func TestNewCmdAliasesAndFlags(t *testing.T) {
 	}
 	if attachFlag.Shorthand != "A" {
 		t.Errorf("expected shorthand 'A', got %q", attachFlag.Shorthand)
+	}
+}
+
+func TestRootCmdPersistentPreRun(t *testing.T) {
+	if rootCmd.PersistentPreRun == nil {
+		t.Fatal("expected rootCmd to have PersistentPreRun hook configured")
+	}
+
+	tempDir := t.TempDir()
+	t.Setenv("POCK_DATA_DIR", tempDir)
+
+	// Create a dead session
+	sess := &session.Session{
+		Name: "dead-root-test",
+		PID:  99999999,
+	}
+	_ = sess.Save()
+	sockPath, _ := session.SocketPath("dead-root-test")
+	_ = os.WriteFile(sockPath, []byte(""), 0600)
+
+	// Run PersistentPreRun
+	rootCmd.PersistentPreRun(rootCmd, nil)
+
+	// Verify dead session was cleaned up
+	if _, err := os.Stat(sockPath); err == nil {
+		t.Errorf("expected dead socket to be cleaned up by PersistentPreRun")
+	}
+	if _, err := session.Load("dead-root-test"); err == nil {
+		t.Errorf("expected dead json to be cleaned up by PersistentPreRun")
 	}
 }

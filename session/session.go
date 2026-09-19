@@ -10,16 +10,20 @@ import (
 	"time"
 )
 
-// Session represents a tuck session
+// Session represents a pock session
 type Session struct {
 	Name       string    `json:"name"`
 	PID        int       `json:"pid"`
 	Command    []string  `json:"command"`
 	LastActive time.Time `json:"last_active"`
+	BootID     string    `json:"boot_id,omitempty"`
 }
 
 // DataDir returns the directory for storing session data
 func DataDir() (string, error) {
+	if dir := os.Getenv("POCK_DATA_DIR"); dir != "" {
+		return dir, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
@@ -99,18 +103,153 @@ func Load(name string) (*Session, error) {
 	return &s, nil
 }
 
-// Exists checks if a session exists
-func Exists(name string) bool {
-	path, err := SocketPath(name)
+// CurrentBootID returns the system boot ID if available (Linux).
+// Returns an empty string if not supported or unavailable.
+func CurrentBootID() string {
+	data, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// verifyProcessCmdline checks if the process with the given PID corresponds to pock
+func verifyProcessCmdline(pid int, sessionName string) bool {
+	if pid == os.Getpid() {
+		return true
+	}
+	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	if err != nil {
+		// Non-Linux or /proc unavailable, skip cmdline check
+		return true
+	}
+	cmdStr := string(cmdline)
+	return strings.Contains(cmdStr, sessionName) || strings.Contains(cmdStr, "pock") || strings.Contains(cmdStr, "tuck")
+}
+
+// IsSessionAlive checks whether a session's server process is genuinely running and alive.
+func IsSessionAlive(sess *Session) bool {
+	if sess == nil || sess.PID <= 0 {
+		return false
+	}
+
+	// 1. Check Boot ID: if recorded and boot ID changed, it is from a previous boot
+	if curBoot := CurrentBootID(); curBoot != "" && sess.BootID != "" && sess.BootID != curBoot {
+		return false
+	}
+
+	// 2. Check if process exists
+	if !isProcessRunning(sess.PID) {
+		return false
+	}
+
+	// 3. Verify process cmdline (guards against PID reuse across reboot or wrap-around)
+	if !verifyProcessCmdline(sess.PID, sess.Name) {
+		return false
+	}
+
+	// 4. Verify socket file exists
+	sockPath, err := SocketPath(sess.Name)
 	if err != nil {
 		return false
 	}
-	_, err = os.Stat(path)
-	return err == nil
+	if _, err := os.Stat(sockPath); err != nil {
+		return false
+	}
+
+	return true
 }
 
-// List returns all sessions
+// CleanupStale scans the data directory and removes all stale sessions and orphaned files
+// left behind by system reboots, process crashes, or unclean shutdowns.
+func CleanupStale() error {
+	dir, err := DataDir()
+	if err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read data directory: %w", err)
+	}
+
+	activeSessions := make(map[string]bool)
+
+	// Phase 1: Check all .json metadata files
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		name := entry.Name()[:len(entry.Name())-5] // remove .json
+		s, err := Load(name)
+		if err != nil {
+			// Corrupted json, remove stale files
+			_ = Remove(name)
+			continue
+		}
+		if !IsSessionAlive(s) {
+			// Dead process, previous boot, or missing socket
+			_ = Remove(name)
+			continue
+		}
+		activeSessions[name] = true
+	}
+
+	// Phase 2: Check for orphaned .sock and .err files with no active session
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(entry.Name())
+		if ext == ".sock" || ext == ".err" {
+			name := entry.Name()[:len(entry.Name())-len(ext)]
+			if !activeSessions[name] {
+				_ = Remove(name)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Exists checks if a session exists and is alive.
+// If the session is stale (from previous boot or dead process) or an orphaned socket exists,
+// it automatically cleans up the stale files and returns false.
+func Exists(name string) bool {
+	sockPath, err := SocketPath(name)
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(sockPath); err != nil {
+		return false
+	}
+
+	// Socket file exists, check if session is actually alive
+	sess, err := Load(name)
+	if err != nil {
+		// Socket exists but no valid json metadata -> stale/orphaned
+		_ = Remove(name)
+		return false
+	}
+
+	if !IsSessionAlive(sess) {
+		// Stale session (dead process or previous boot)
+		_ = Remove(name)
+		return false
+	}
+
+	return true
+}
+
+// List returns all active sessions, cleaning up any stale ones
 func List() ([]*Session, error) {
+	if err := CleanupStale(); err != nil {
+		return nil, err
+	}
+
 	dir, err := DataDir()
 	if err != nil {
 		return nil, err
@@ -126,18 +265,12 @@ func List() ([]*Session, error) {
 
 	var sessions []*Session
 	for _, entry := range entries {
-		if filepath.Ext(entry.Name()) != ".json" {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
 		name := entry.Name()[:len(entry.Name())-5] // remove .json
 		s, err := Load(name)
 		if err != nil {
-			continue
-		}
-		// Check if the process is still running
-		if !isProcessRunning(s.PID) {
-			// Clean up stale session
-			_ = Remove(name)
 			continue
 		}
 		sessions = append(sessions, s)

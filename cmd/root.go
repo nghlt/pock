@@ -112,6 +112,9 @@ so your terminal's scrollback buffer remains fully functional.`,
 
   # List all active sessions
   pock list`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		_ = session.CleanupStale()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default to "pock new" behavior
 		newCmd.Run(cmd, args)
