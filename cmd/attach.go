@@ -3,16 +3,17 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/nghlt/pock/session"
 	"github.com/spf13/cobra"
 )
 
 var attachCmd = &cobra.Command{
-	Use:     "attach [name]",
+	Use:     "attach [name|number]",
 	Aliases: []string{"a"},
 	Short:   "Attach to an existing session",
-	Long: `Attach to an existing session with the given name.
+	Long: `Attach to an existing session with the given name or list number.
 If no name is specified, attaches to the most recently active session.
 
 Use ` + "`?.`" + ` (default) or configured detach key to detach.`,
@@ -20,7 +21,10 @@ Use ` + "`?.`" + ` (default) or configured detach key to detach.`,
   pock attach
 
   # Attach to a specific session by name
-  pock attach myproject`,
+  pock attach myproject
+
+  # Attach to a session by its list number
+  pock attach 1`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		checkNotNested()
@@ -46,6 +50,15 @@ Use ` + "`?.`" + ` (default) or configured detach key to detach.`,
 			name = s.Name
 		} else {
 			name = args[0]
+			if session.IsAllDigits(name) {
+				num, err := strconv.Atoi(name)
+				if err == nil {
+					sessions, listErr := session.List()
+					if listErr == nil && num >= 1 && num <= len(sessions) {
+						name = sessions[num-1].Name
+					}
+				}
+			}
 			if err := session.ValidateName(name); err != nil {
 				fmt.Fprintf(os.Stderr, "%s %v\n", session.ColorRed("Error:", isTTY), err)
 				os.Exit(1)

@@ -56,17 +56,33 @@ func TestWriteReadMessage(t *testing.T) {
 }
 
 func TestValidateName(t *testing.T) {
-	valid := []string{"mysession", "session-1", "dev_test", "work123"}
+	valid := []string{"mysession", "session-1", "dev_test", "work123", "123work", "1-2"}
 	for _, name := range valid {
 		if err := ValidateName(name); err != nil {
 			t.Errorf("expected %q to be valid, got err: %v", name, err)
 		}
 	}
 
-	invalid := []string{"", "foo/bar", "foo\\bar", ".hidden", "my session", "foo\x00bar", "a*b"}
+	invalid := []string{"", "foo/bar", "foo\\bar", ".hidden", "my session", "foo\x00bar", "a*b", "0", "1", "123", "007"}
 	for _, name := range invalid {
 		if err := ValidateName(name); err == nil {
 			t.Errorf("expected %q to be invalid, but got nil", name)
+		}
+	}
+}
+
+func TestIsAllDigits(t *testing.T) {
+	digits := []string{"0", "1", "123", "9999"}
+	for _, s := range digits {
+		if !IsAllDigits(s) {
+			t.Errorf("expected %q to be all digits", s)
+		}
+	}
+
+	nonDigits := []string{"", "a", "123a", "a123", "1-2", " ", " 123 "}
+	for _, s := range nonDigits {
+		if IsAllDigits(s) {
+			t.Errorf("expected %q NOT to be all digits", s)
 		}
 	}
 }

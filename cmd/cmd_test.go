@@ -93,3 +93,15 @@ func TestRootCmdPersistentPreRun(t *testing.T) {
 		t.Errorf("expected dead json to be cleaned up by PersistentPreRun")
 	}
 }
+
+func TestAttachCmdAliases(t *testing.T) {
+	hasA := false
+	for _, a := range attachCmd.Aliases {
+		if a == "a" {
+			hasA = true
+		}
+	}
+	if !hasA {
+		t.Errorf("expected attachCmd to have 'a' alias, got: %v", attachCmd.Aliases)
+	}
+}

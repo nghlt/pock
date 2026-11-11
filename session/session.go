@@ -307,6 +307,19 @@ func Remove(name string) error {
 	return nil
 }
 
+// IsAllDigits checks if a string is non-empty and contains only ASCII digits ('0'-'9').
+func IsAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateName checks if a session name is valid
 func ValidateName(name string) error {
 	if name == "" {
@@ -314,6 +327,9 @@ func ValidateName(name string) error {
 	}
 	if strings.ContainsAny(name, "/\\:*?\"<>|\x00 \t\n\r") || strings.HasPrefix(name, ".") {
 		return fmt.Errorf("invalid session name %q: must not contain path separators, spaces, or start with '.'", name)
+	}
+	if IsAllDigits(name) {
+		return fmt.Errorf("invalid session name %q: cannot consist only of numbers", name)
 	}
 	return nil
 }

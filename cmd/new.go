@@ -200,7 +200,7 @@ func generateSessionName() string {
 		return "session"
 	}
 	base := filepath.Base(cwd)
-	if base == "" || base == "/" || base == "." {
+	if base == "" || base == "/" || base == "." || session.IsAllDigits(base) {
 		base = "session"
 	}
 
