@@ -113,6 +113,19 @@ func TestRunInteractiveMenu(t *testing.T) {
 		}
 	}
 
+	// 1b. Press Enter (empty input) -> Exit immediately
+	{
+		var attached string
+		in := strings.NewReader("\n")
+		var out bytes.Buffer
+		runInteractiveMenu(in, &out, sessions, false, func(name string) {
+			attached = name
+		})
+		if attached != "" {
+			t.Errorf("expected no attach on empty Enter, got %q", attached)
+		}
+	}
+
 	// 2. Select valid session number 1 -> attach session-a
 	{
 		var attached string

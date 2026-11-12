@@ -48,7 +48,7 @@ var listCmd = &cobra.Command{
 			}
 			fmt.Println("No active sessions.")
 			fmt.Println()
-			fmt.Printf("%s  %s\n\n", session.ColorBold("0", isTTY), session.ColorDim("(exit)", isTTY))
+			fmt.Printf("%s  %s\n\n", session.ColorBold("0", isTTY), session.ColorDim("(exit, or press Enter)", isTTY))
 			runInteractiveMenu(os.Stdin, os.Stdout, sessions, isTTY, func(name string) {
 				createAndAttachSession(name, nil, true)
 			})
@@ -67,7 +67,7 @@ var listCmd = &cobra.Command{
 		}
 		leadZero := strings.Repeat(" ", col0Width-1)
 		fmt.Println()
-		fmt.Printf("%s%s  %s\n\n", leadZero, session.ColorBold("0", isTTY), session.ColorDim("(exit)", isTTY))
+		fmt.Printf("%s%s  %s\n\n", leadZero, session.ColorBold("0", isTTY), session.ColorDim("(exit, or press Enter)", isTTY))
 
 		runInteractiveMenu(os.Stdin, os.Stdout, sessions, isTTY, func(name string) {
 			createAndAttachSession(name, nil, true)
@@ -168,9 +168,9 @@ func runInteractiveMenu(r io.Reader, w io.Writer, sessions []*session.Session, i
 	scanner := bufio.NewScanner(r)
 	for {
 		if len(sessions) == 0 {
-			fmt.Fprint(w, session.ColorBold("Enter session name to create, or 0 to exit: ", isTTY))
+			fmt.Fprint(w, session.ColorBold("Enter name to create (or press Enter to exit): ", isTTY))
 		} else {
-			fmt.Fprint(w, session.ColorBold(fmt.Sprintf("Select session [0-%d] or enter name: ", len(sessions)), isTTY))
+			fmt.Fprint(w, session.ColorBold(fmt.Sprintf("Select session [1-%d] or enter name (Enter to exit): ", len(sessions)), isTTY))
 		}
 
 		if !scanner.Scan() {
@@ -179,11 +179,7 @@ func runInteractiveMenu(r io.Reader, w io.Writer, sessions []*session.Session, i
 		}
 
 		input := strings.TrimSpace(scanner.Text())
-		if input == "" {
-			continue
-		}
-
-		if input == "0" {
+		if input == "" || input == "0" {
 			return
 		}
 
@@ -191,9 +187,9 @@ func runInteractiveMenu(r io.Reader, w io.Writer, sessions []*session.Session, i
 			num, err := strconv.Atoi(input)
 			if err != nil || num < 1 || num > len(sessions) {
 				if len(sessions) == 0 {
-					fmt.Fprintf(w, "%s invalid selection %q. Enter 0 to exit or enter a session name.\n", session.ColorRed("Error:", isTTY), input)
+					fmt.Fprintf(w, "%s invalid selection %q. Enter a session name or press Enter to exit.\n", session.ColorRed("Error:", isTTY), input)
 				} else {
-					fmt.Fprintf(w, "%s invalid selection %q. Choose 0-%d or enter a session name.\n", session.ColorRed("Error:", isTTY), input, len(sessions))
+					fmt.Fprintf(w, "%s invalid selection %q. Choose 1-%d, enter a session name, or press Enter to exit.\n", session.ColorRed("Error:", isTTY), input, len(sessions))
 				}
 				continue
 			}
